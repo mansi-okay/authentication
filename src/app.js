@@ -14,6 +14,6 @@ app.use(express.urlencoded({
 
 import { authRouter } from "./routes/auth.route.js"
 
-app.use("/api/users",authRouter)
+app.use("/api/auth",authRouter)
 
 export {app}

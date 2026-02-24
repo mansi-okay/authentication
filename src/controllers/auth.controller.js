@@ -3,6 +3,8 @@ import {asyncHandler} from "../utils/asyncHandler.js"
 import { ApiError } from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import { genTokens } from "../utils/token.js"
+import { sendOTPMail } from "../utils/mail.js"
+import bcrypt from "bcrypt"
 
 const signUp = asyncHandler(async(req,res) => {
     const {fullname,email,password,mobile,role} = req.body
@@ -113,4 +115,106 @@ const signOut = asyncHandler(async(req,res) => {
     )
 })
 
-export {signUp,signIn,signOut}
+const sendOTP = asyncHandler(async(req,res) => {
+    const {email} = req.body
+
+    if(!email?.trim()){
+        throw new ApiError(400,"Email required!")
+    }
+    
+    const existingUser = await User.findOne({email})
+
+    if(!existingUser){
+        throw new ApiError(400,"User does not exist!")
+    }
+
+    const otp = Math.floor(1000 + Math.random()*9000).toString()
+
+    const hashedOTP = await bcrypt.hash(otp,10)
+
+    existingUser.resetOTP = hashedOTP
+    existingUser.otpExpiry = Date.now()+5*60*1000
+    await existingUser.save()
+
+    await sendOTPMail(email,otp)
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200,{},"OTP sent successfully")
+    )
+})
+
+const verifyOTP = asyncHandler(async(req,res) => {
+    const {email,otp} = req.body 
+
+    if (!email?.trim() || !otp?.trim()){
+        throw new ApiError(400,"All fields required!")
+    }
+
+    const existingUser = await User.findOne({email})
+
+    if(!existingUser){
+        throw new ApiError(400,"User does not exist!")
+    }
+
+    if (!existingUser.otpExpiry || existingUser.otpExpiry < Date.now()){
+        throw new ApiError(400,"OTP expired!!")
+    }
+
+    const otpMatch = await bcrypt.compare(otp, existingUser.resetOTP)
+
+    if(!otpMatch){
+        throw new ApiError(400,"OTP does not match!")
+    }
+
+    await User.findByIdAndUpdate(
+        existingUser._id,
+        {
+            $set: {verifiedOTP: true},
+            $unset:{
+                resetOTP:1,
+                otpExpiry:1
+            }
+        }
+    )
+
+    return res.status(200)
+    .json(new ApiResponse(200,"OTP vverification successful"))
+})
+
+const resetPassword = asyncHandler(async(req,res) => {
+    const {email,newPassword,confirmPassword} = req.body
+    
+    if (!email?.trim() || !newPassword?.trim() || !confirmPassword?.trim()){
+        throw new ApiError(400,"All fields required!")
+    }
+
+    if (newPassword.length <6){
+        throw new ApiError(400, "Password must be of atleast 6 characters.")
+    }
+
+    if(newPassword !== confirmPassword){
+        throw new ApiError(400, "Confirm password does not match")
+    }
+
+    const user = await User.findOne({email})
+
+    if(!user){
+        throw new ApiError(400,"User does not exist!")
+    }
+
+    if(!user.verifiedOTP){
+        throw new ApiError(400,"OTP not verified!")
+    }
+
+    user.password = newPassword
+    user.verifiedOTP = false
+
+    await user.save()
+
+    return res.status(200)
+    .json(new ApiResponse(200,{},"Password change successful"))
+})
+
+export {signUp,signIn,signOut,sendOTP,verifyOTP,resetPassword}

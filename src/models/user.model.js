@@ -25,6 +25,16 @@ const userSchema = new Schema({
     },
     refreshToken: {
         type: String
+    },
+    resetOTP:{
+        type:String
+    },
+    verifiedOTP:{
+        type: Boolean,
+        default:false
+    },
+    otpExpiry:{
+        type:Date
     }
 },
 {
