@@ -10,13 +10,13 @@ const genTokens = async(userID) => {
             throw new ApiError(400,"User does not exist!")
         }
 
-        const accessToken = jwt.sign(
+        const accessToken = await jwt.sign(
             {_id : userID},
             process.env.ACCESS_TOKEN_SECRET,
             {expiresIn:process.env.ACCESS_TOKEN_EXPIRY}
         )
 
-        const refreshToken = jwt.sign(
+        const refreshToken = await jwt.sign(
             {_id : userID},
             process.env.REFRESH_TOKEN_SECRET,
             {expiresIn:process.env.REFRESH_TOKEN_EXPIRY}
